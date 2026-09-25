@@ -282,7 +282,6 @@ if submitted:
     elif not competency.strip() or not lesson_name.strip():
         st.warning("⚠️ Please fill in all required fields: Lesson Title and Learning Competency.")
     else:
-        # Standard production model names
         candidate_models = ["gemini-2.0-flash", "gemini-1.5-flash"]
         
         user_payload = f"""
@@ -464,3 +463,4 @@ if st.session_state["current_plan"]:
     with tab_json:
         st.markdown("#### Raw Template Context")
         st.json(data)
+    
