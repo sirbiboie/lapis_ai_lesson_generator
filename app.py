@@ -3,8 +3,7 @@ import json
 import re
 import time
 import streamlit as st
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 from docxtpl import DocxTemplate
 
 # ---------------------------------------------------------
@@ -167,31 +166,29 @@ with st.form("lapis_form"):
         st.markdown("##### 🎯 Revised K to 10 Alignment & Depth")
         competency = st.text_area(
             "Learning Competency (Required)*",
-            placeholder="Paste standard competency from the Revised K to 10 Curriculum Guide (e.g., Identify living and non-living components of an ecosystem).",
+            placeholder="Paste standard competency from the Revised K to 10 Curriculum Guide.",
             height=100
         )
         
         detail_mode = st.radio(
             "⚡ Detail Level & Instruction Depth",
             options=["Comprehensive / Ultra-Detailed (Scripted Steps)", "Standard (Concise Structure)"],
-            index=0,
-            help="Ultra-detailed mode includes verbatim teacher scripts, expected student responses, explicit activity procedures, and time allocations."
+            index=0
         )
 
         duration = st.text_input("Duration / Period", value="1 Session (45-60 minutes)")
         activity_count = st.select_slider(
             "Activity Structure Rule", 
             options=[1, 3, 5], 
-            value=3,
-            help="1 = Minimal/Focused, 3 = Standard Balanced, 5 = Comprehensive Multi-Activity Flow"
+            value=3
         )
         learner_context = st.text_input(
             "Learner Context (Optional)",
-            placeholder="e.g., Kinesthetic learners, differentiated support for struggling readers."
+            placeholder="e.g., Kinesthetic learners, differentiated support."
         )
         references = st.text_input(
             "References (Optional)",
-            placeholder="e.g., DepEd Revised K to 10 Curriculum Guide, LRMDS Portal"
+            placeholder="e.g., DepEd Revised K to 10 Curriculum Guide"
         )
 
     st.write("")
@@ -201,68 +198,43 @@ with st.form("lapis_form"):
 # 4. SYSTEM PROMPT
 # ---------------------------------------------------------
 MASTER_SYSTEM_PROMPT = """
-You are LAPIS (Learner-Centered & AI-Powered Instructional System), an expert master instructional designer for the Department of Education (DepEd) Philippines, adhering strictly to the DepEd Revised K to 10 Curriculum framework.
+You are LAPIS, an expert master instructional designer for DepEd Philippines (Revised K to 10 Curriculum).
+Generate an EXTREMELY DETAILED lesson plan formatted STRICTLY as a raw JSON object. Do NOT wrap output in markdown fences (```json).
 
-Your task is to generate an EXTREMELY DETAILED, highly actionable lesson plan formatted STRICTLY as a raw JSON object matching the exact key structure provided below. Do NOT output markdown code blocks (e.g., ```json), plain text explanations, or extra commentary. Output ONLY valid JSON.
-
-JSON STRUCTURE TO FOLLOW STRICTLY:
+JSON STRUCTURE:
 {
-  "ai_declaration": "Generated using LAPIS AI Assistant aligned with the DepEd Revised K to 10 Curriculum Framework.",
+  "ai_declaration": "Generated using LAPIS AI Assistant aligned with DepEd Revised K to 10 Framework.",
   "intentions_objectives": [
-    "Knowledge (K): Exactly 1 highly specific knowledge objective aligned with the Revised K to 10 competency.",
-    "Skills (S): Exactly 1 skill/performance objective focusing on concrete learner output.",
-    "Attitude (A): Exactly 1 attitude or values integration objective (GMRC/Makabansa)."
+    "Knowledge (K): Exactly 1 knowledge objective.",
+    "Skills (S): Exactly 1 skill objective.",
+    "Attitude (A): Exactly 1 attitude objective."
   ],
-  "pre_lesson": "Comprehensive warm-up or prior knowledge review activity including exact teacher script/questions and anticipated student responses.",
+  "pre_lesson": "Warm-up activity with teacher questions and expected student responses.",
   "learning_steps": [
     {
       "phase": "Introduction & Motivation",
-      "details": "Thorough breakdown of phase goals, time management, and teacher setup.",
-      "activities": [
-        {
-          "activity_name": "Activity 1 Title",
-          "description": "Exhaustive, step-by-step instructions. Include explicit teacher directives ('Teacher says:...'), expected learner behavior ('Students will:...'), grouping details, exact activity rules, and discussion prompts."
-        }
-      ]
+      "details": "Phase goals and breakdown.",
+      "activities": [{"activity_name": "Title", "description": "Step by step instructions"}]
     },
     {
       "phase": "Main Guided Practice",
-      "details": "Thorough instructional breakdown of core learning tasks.",
-      "activities": [
-        {
-          "activity_name": "Activity Title",
-          "description": "Step-by-step execution procedure with fully articulated instructions, worksheet/task card directions, scaffolded teacher assistance steps, and check-for-understanding questions."
-        }
-      ]
+      "details": "Core task breakdown.",
+      "activities": [{"activity_name": "Title", "description": "Step by step instructions"}]
     },
     {
       "phase": "Wrap-Up & Reflection",
-      "details": "Synthesis and meta-cognitive reflection overview.",
-      "activities": [
-        {
-          "activity_name": "Synthesis Activity",
-          "description": "Complete consolidation protocol including guided reflection questions, student recap procedures, and values connection."
-        }
-      ]
+      "details": "Reflection overview.",
+      "activities": [{"activity_name": "Title", "description": "Step by step instructions"}]
     }
   ],
-  "learning_resources": "Exhaustive list of physical, printed, and digital materials, task cards, visual aids, and manipulatives required.",
-  "opportunities_for_integration": "Concrete, actionable integration of values (GMRC), literacy, numeracy, cross-disciplinary links, and patriotic/community context (Makabansa).",
+  "learning_resources": "Required materials list.",
+  "opportunities_for_integration": "Values and cross-disciplinary links.",
   "assessment_tasks": [
-    {
-      "task": "Fully detailed formative or summative assessment task with complete test items, prompt instructions, or rubric criteria.",
-      "accommodation": "Detailed differentiated support strategies for struggling learners, fast finishers, and diverse learning styles."
-    }
+    {"task": "Assessment details", "accommodation": "Support for struggling learners"}
   ],
-  "extended_learning": "Detailed enrichment or remediation activity to be performed outside regular classroom hours.",
-  "reflections": "Specific post-lesson evaluation questions for teacher self-reflection on learner engagement, mastery rate, and instructional effectiveness."
+  "extended_learning": "Enrichment activity.",
+  "reflections": "Teacher self-reflection prompts."
 }
-
-EXACT OBJECTIVE RULE:
-`intentions_objectives` MUST contain exactly THREE items (1 Knowledge, 1 Skills, 1 Attitude).
-
-MAXIMUM DETAIL RULE:
-When detailed instructions are requested, DO NOT write brief summaries or placeholders. Write full sentences, step-by-step numbered steps within descriptions, explicit teacher prompts, and thorough activity mechanics.
 """
 
 def generate_docx_from_template(context):
@@ -274,31 +246,30 @@ def generate_docx_from_template(context):
     return bio
 
 # ---------------------------------------------------------
-# 5. GENERATION LOGIC
+# 5. GENERATION LOGIC (USING STABLE GENAI LIBRARY)
 # ---------------------------------------------------------
 if submitted:
     if not api_key:
-        st.error("🔑 API Key not found. Please configure `GEMINI_API_KEY` in Streamlit Cloud Secrets.")
+        st.error("🔑 API Key not found. Please configure `GEMINI_API_KEY` in Streamlit Secrets.")
     elif not competency.strip() or not lesson_name.strip():
         st.warning("⚠️ Please fill in all required fields: Lesson Title and Learning Competency.")
     else:
-        candidate_models = ["gemini-2.0-flash", "gemini-1.5-flash"]
-        
         user_payload = f"""
-        lesson_name: {lesson_name}
-        subject: {subject}
-        teacher_name: {teacher_name if teacher_name else 'DepEd Teacher'}
-        position: {position}
-        grade_level: {grade_level}
-        section_class: {section_class if section_class else 'All Sections'}
-        duration: {duration}
-        detail_level: {detail_mode}
-        references: {references if references else 'DepEd Revised K to 10 Curriculum Guide'}
-        competency: {competency}
-        activity_count: {activity_count}
-        learner_context: {learner_context if learner_context else 'General elementary learners'}
-        
-        SPECIAL INSTRUCTION: Please provide maximal instructional detail, complete teacher scripting, step-by-step procedures, and explicit student tasks according to the detail level selected: {detail_mode}.
+        System Context: {MASTER_SYSTEM_PROMPT}
+
+        Lesson Input Details:
+        - Lesson Title: {lesson_name}
+        - Subject: {subject}
+        - Teacher: {teacher_name if teacher_name else 'DepEd Teacher'}
+        - Position: {position}
+        - Grade Level: {grade_level}
+        - Section: {section_class if section_class else 'All Sections'}
+        - Duration: {duration}
+        - Detail Level: {detail_mode}
+        - References: {references if references else 'DepEd Revised K to 10 Curriculum Guide'}
+        - Competency: {competency}
+        - Activity Count Rule: {activity_count}
+        - Learner Context: {learner_context if learner_context else 'General elementary learners'}
         """
 
         response = None
@@ -307,21 +278,19 @@ if submitted:
 
         with st.spinner("✏️ LAPIS is crafting your detailed Revised K to 10 lesson plan..."):
             try:
-                client = genai.Client(api_key=api_key)
+                genai.configure(api_key=api_key)
                 
-                for model_name in candidate_models:
+                # Standard stable model aliases
+                for model_alias in ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro"]:
                     try:
-                        response = client.models.generate_content(
-                            model=model_name,
-                            contents=user_payload,
-                            config=types.GenerateContentConfig(
-                                system_instruction=MASTER_SYSTEM_PROMPT,
-                                temperature=0.2,
-                                response_mime_type="application/json",
-                            )
+                        model = genai.GenerativeModel(
+                            model_name=model_alias,
+                            generation_config={"response_mime_type": "application/json", "temperature": 0.2}
                         )
-                        success = True
-                        break
+                        response = model.generate_content(user_payload)
+                        if response and response.text:
+                            success = True
+                            break
                     except Exception as err:
                         last_error_msg = str(err)
                         continue
@@ -463,4 +432,3 @@ if st.session_state["current_plan"]:
     with tab_json:
         st.markdown("#### Raw Template Context")
         st.json(data)
-    
