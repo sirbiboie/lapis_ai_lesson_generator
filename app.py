@@ -282,7 +282,8 @@ if submitted:
     elif not competency.strip() or not lesson_name.strip():
         st.warning("⚠️ Please fill in all required fields: Lesson Title and Learning Competency.")
     else:
-        candidate_models = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+        # Fixed model aliases compatible with v1beta endpoint
+        candidate_models = ["gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro-latest"]
         
         user_payload = f"""
         lesson_name: {lesson_name}
