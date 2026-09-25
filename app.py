@@ -277,8 +277,10 @@ def generate_docx_from_template(context):
     bio.seek(0)
     return bio
 
+import time
+
 # ---------------------------------------------------------
-# 5. GENERATION LOGIC
+# 5. GENERATION LOGIC WITH AUTO-FALLBACK & RETRIES
 # ---------------------------------------------------------
 if submitted:
     if not api_key:
@@ -286,38 +288,61 @@ if submitted:
     elif not competency.strip() or not lesson_name.strip():
         st.warning("⚠️ Please fill in all required fields: Lesson Title and Learning Competency.")
     else:
-        try:
+        # List of models to try sequentially if one is experiencing high demand (503)
+        candidate_models = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+        
+        user_payload = f"""
+        lesson_name: {lesson_name}
+        subject: {subject}
+        teacher_name: {teacher_name if teacher_name else 'DepEd Teacher'}
+        position: {position}
+        grade_level: {grade_level}
+        section_class: {section_class if section_class else 'All Sections'}
+        duration: {duration}
+        detail_level: {detail_mode}
+        references: {references if references else 'DepEd Revised K to 10 Curriculum Guide'}
+        competency: {competency}
+        activity_count: {activity_count}
+        learner_context: {learner_context if learner_context else 'General elementary learners'}
+        
+        SPECIAL INSTRUCTION: Please provide maximal instructional detail, complete teacher scripting, step-by-step procedures, and explicit student tasks according to the detail level selected: {detail_mode}.
+        """
+
+        response = None
+        success = False
+
+        with st.spinner("✏️ LAPIS is crafting your detailed Revised K to 10 lesson plan..."):
             client = genai.Client(api_key=api_key)
-
-            user_payload = f"""
-            lesson_name: {lesson_name}
-            subject: {subject}
-            teacher_name: {teacher_name if teacher_name else 'DepEd Teacher'}
-            position: {position}
-            grade_level: {grade_level}
-            section_class: {section_class if section_class else 'All Sections'}
-            duration: {duration}
-            detail_level: {detail_mode}
-            references: {references if references else 'DepEd Revised K to 10 Curriculum Guide'}
-            competency: {competency}
-            activity_count: {activity_count}
-            learner_context: {learner_context if learner_context else 'General elementary learners'}
             
-            SPECIAL INSTRUCTION: Please provide maximal instructional detail, complete teacher scripting, step-by-step procedures, and explicit student tasks according to the detail level selected: {detail_mode}.
-            """
+            for model_name in candidate_models:
+                # Attempt up to 2 retries per model if 503 occurs
+                for attempt in range(2):
+                    try:
+                        response = client.models.generate_content(
+                            model=model_name,
+                            contents=user_payload,
+                            config=types.GenerateContentConfig(
+                                system_instruction=MASTER_SYSTEM_PROMPT,
+                                temperature=0.2,
+                                response_mime_type="application/json",
+                                tools=[]
+                            )
+                        )
+                        success = True
+                        break
+                    except Exception as err:
+                        err_msg = str(err)
+                        if "503" in err_msg or "UNAVAILABLE" in err_msg:
+                            time.sleep(2)  # Short pause before retry
+                            continue
+                        else:
+                            raise err
+                if success:
+                    break
 
-            with st.spinner("✏️ LAPIS is crafting your detailed Revised K to 10 lesson plan..."):
-                response = client.models.generate_content(
-                    model="gemini-3.6-flash",
-                    contents=user_payload,
-                    config=types.GenerateContentConfig(
-                        system_instruction=MASTER_SYSTEM_PROMPT,
-                        temperature=0.2,
-                        response_mime_type="application/json",
-                        tools=[]
-                    )
-                )
-
+        if not success or not response:
+            st.error("⚠️ Google AI servers are experiencing extremely high global demand right now. Please wait 10 seconds and click Generate again.")
+        else:
             clean_text = response.text.strip()
             if clean_text.startswith("```"):
                 clean_text = re.sub(r'''^```(?:json)?\n?''', '', clean_text)
@@ -355,10 +380,6 @@ if submitted:
             })
 
             st.toast("Detailed LAPIS Lesson Plan Generated Successfully!", icon="✏️")
-
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
-
 # ---------------------------------------------------------
 # 6. OUTPUT PRESENTATION
 # ---------------------------------------------------------
