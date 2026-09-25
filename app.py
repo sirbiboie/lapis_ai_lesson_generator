@@ -246,7 +246,7 @@ def generate_docx_from_template(context):
     return bio
 
 # ---------------------------------------------------------
-# 5. GENERATION LOGIC (USING STABLE GENAI LIBRARY)
+# 5. GENERATION LOGIC
 # ---------------------------------------------------------
 if submitted:
     if not api_key:
@@ -280,8 +280,8 @@ if submitted:
             try:
                 genai.configure(api_key=api_key)
                 
-                # Standard stable model aliases
-                for model_alias in ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro"]:
+                # Active supported models only
+                for model_alias in ["gemini-2.5-flash", "gemini-1.5-flash"]:
                     try:
                         model = genai.GenerativeModel(
                             model_name=model_alias,
