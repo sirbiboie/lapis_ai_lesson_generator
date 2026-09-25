@@ -282,8 +282,8 @@ if submitted:
     elif not competency.strip() or not lesson_name.strip():
         st.warning("⚠️ Please fill in all required fields: Lesson Title and Learning Competency.")
     else:
-        # Fully working Gemini API model IDs
-        candidate_models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+        # Standard production model names
+        candidate_models = ["gemini-2.0-flash", "gemini-1.5-flash"]
         
         user_payload = f"""
         lesson_name: {lesson_name}
@@ -311,29 +311,21 @@ if submitted:
                 client = genai.Client(api_key=api_key)
                 
                 for model_name in candidate_models:
-                    for attempt in range(2):
-                        try:
-                            response = client.models.generate_content(
-                                model=model_name,
-                                contents=user_payload,
-                                config=types.GenerateContentConfig(
-                                    system_instruction=MASTER_SYSTEM_PROMPT,
-                                    temperature=0.2,
-                                    response_mime_type="application/json",
-                                    tools=[]
-                                )
+                    try:
+                        response = client.models.generate_content(
+                            model=model_name,
+                            contents=user_payload,
+                            config=types.GenerateContentConfig(
+                                system_instruction=MASTER_SYSTEM_PROMPT,
+                                temperature=0.2,
+                                response_mime_type="application/json",
                             )
-                            success = True
-                            break
-                        except Exception as err:
-                            last_error_msg = str(err)
-                            if "503" in last_error_msg or "UNAVAILABLE" in last_error_msg:
-                                time.sleep(2)
-                                continue
-                            else:
-                                break
-                    if success:
+                        )
+                        success = True
                         break
+                    except Exception as err:
+                        last_error_msg = str(err)
+                        continue
             except Exception as e:
                 last_error_msg = str(e)
 
