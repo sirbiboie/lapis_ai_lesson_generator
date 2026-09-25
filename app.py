@@ -3,7 +3,8 @@ import json
 import re
 import time
 import streamlit as st
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from docxtpl import DocxTemplate
 
 # ---------------------------------------------------------
@@ -198,42 +199,61 @@ with st.form("lapis_form"):
 # 4. SYSTEM PROMPT
 # ---------------------------------------------------------
 MASTER_SYSTEM_PROMPT = """
-You are LAPIS, an expert master instructional designer for DepEd Philippines (Revised K to 10 Curriculum).
-Generate an EXTREMELY DETAILED lesson plan formatted STRICTLY as a raw JSON object. Do NOT wrap output in markdown fences (```json).
+You are LAPIS (Learner-Centered & AI-Powered Instructional System), an expert master instructional designer for the Department of Education (DepEd) Philippines, adhering strictly to the DepEd Revised K to 10 Curriculum framework.
 
-JSON STRUCTURE:
+Your task is to generate an EXTREMELY DETAILED, highly actionable lesson plan formatted STRICTLY as a raw JSON object matching the exact key structure provided below. Do NOT output markdown code blocks (e.g., ```json), plain text explanations, or extra commentary. Output ONLY valid JSON.
+
+JSON STRUCTURE TO FOLLOW STRICTLY:
 {
-  "ai_declaration": "Generated using LAPIS AI Assistant aligned with DepEd Revised K to 10 Framework.",
+  "ai_declaration": "Generated using LAPIS AI Assistant aligned with the DepEd Revised K to 10 Curriculum Framework.",
   "intentions_objectives": [
-    "Knowledge (K): Exactly 1 knowledge objective.",
-    "Skills (S): Exactly 1 skill objective.",
-    "Attitude (A): Exactly 1 attitude objective."
+    "Knowledge (K): Exactly 1 highly specific knowledge objective aligned with the Revised K to 10 competency.",
+    "Skills (S): Exactly 1 skill/performance objective focusing on concrete learner output.",
+    "Attitude (A): Exactly 1 attitude or values integration objective (GMRC/Makabansa)."
   ],
-  "pre_lesson": "Warm-up activity with teacher questions and expected student responses.",
+  "pre_lesson": "Comprehensive warm-up or prior knowledge review activity including exact teacher script/questions and anticipated student responses.",
   "learning_steps": [
     {
       "phase": "Introduction & Motivation",
-      "details": "Phase goals and breakdown.",
-      "activities": [{"activity_name": "Title", "description": "Step by step instructions"}]
+      "details": "Thorough breakdown of phase goals, time management, and teacher setup.",
+      "activities": [
+        {
+          "activity_name": "Activity 1 Title",
+          "description": "Exhaustive, step-by-step instructions. Include explicit teacher directives ('Teacher says:...'), expected learner behavior ('Students will:...'), grouping details, exact activity rules, and discussion prompts."
+        }
+      ]
     },
     {
       "phase": "Main Guided Practice",
-      "details": "Core task breakdown.",
-      "activities": [{"activity_name": "Title", "description": "Step by step instructions"}]
+      "details": "Thorough instructional breakdown of core learning tasks.",
+      "activities": [
+        {
+          "activity_name": "Activity Title",
+          "description": "Step-by-step execution procedure with fully articulated instructions, worksheet/task card directions, scaffolded teacher assistance steps, and check-for-understanding questions."
+        }
+      ]
     },
     {
       "phase": "Wrap-Up & Reflection",
-      "details": "Reflection overview.",
-      "activities": [{"activity_name": "Title", "description": "Step by step instructions"}]
+      "details": "Synthesis and meta-cognitive reflection overview.",
+      "activities": [
+        {
+          "activity_name": "Synthesis Activity",
+          "description": "Complete consolidation protocol including guided reflection questions, student recap procedures, and values connection."
+        }
+      ]
     }
   ],
-  "learning_resources": "Required materials list.",
-  "opportunities_for_integration": "Values and cross-disciplinary links.",
+  "learning_resources": "Exhaustive list of physical, printed, and digital materials, task cards, visual aids, and manipulatives required.",
+  "opportunities_for_integration": "Concrete, actionable integration of values (GMRC), literacy, numeracy, cross-disciplinary links, and patriotic/community context (Makabansa).",
   "assessment_tasks": [
-    {"task": "Assessment details", "accommodation": "Support for struggling learners"}
+    {
+      "task": "Fully detailed formative or summative assessment task with complete test items, prompt instructions, or rubric criteria.",
+      "accommodation": "Detailed differentiated support strategies for struggling learners, fast finishers, and diverse learning styles."
+    }
   ],
-  "extended_learning": "Enrichment activity.",
-  "reflections": "Teacher self-reflection prompts."
+  "extended_learning": "Detailed enrichment or remediation activity to be performed outside regular classroom hours.",
+  "reflections": "Specific post-lesson evaluation questions for teacher self-reflection on learner engagement, mastery rate, and instructional effectiveness."
 }
 """
 
@@ -246,30 +266,32 @@ def generate_docx_from_template(context):
     return bio
 
 # ---------------------------------------------------------
-# 5. GENERATION LOGIC
+# 5. GENERATION LOGIC (GEMINI 3 API)
 # ---------------------------------------------------------
 if submitted:
     if not api_key:
-        st.error("🔑 API Key not found. Please configure `GEMINI_API_KEY` in Streamlit Secrets.")
+        st.error("🔑 API Key not found. Please configure `GEMINI_API_KEY` in Streamlit Cloud Secrets.")
     elif not competency.strip() or not lesson_name.strip():
         st.warning("⚠️ Please fill in all required fields: Lesson Title and Learning Competency.")
     else:
+        # Configured for Gemini 3 series models
+        candidate_models = ["gemini-3-flash", "gemini-3-pro"]
+        
         user_payload = f"""
-        System Context: {MASTER_SYSTEM_PROMPT}
-
-        Lesson Input Details:
-        - Lesson Title: {lesson_name}
-        - Subject: {subject}
-        - Teacher: {teacher_name if teacher_name else 'DepEd Teacher'}
-        - Position: {position}
-        - Grade Level: {grade_level}
-        - Section: {section_class if section_class else 'All Sections'}
-        - Duration: {duration}
-        - Detail Level: {detail_mode}
-        - References: {references if references else 'DepEd Revised K to 10 Curriculum Guide'}
-        - Competency: {competency}
-        - Activity Count Rule: {activity_count}
-        - Learner Context: {learner_context if learner_context else 'General elementary learners'}
+        lesson_name: {lesson_name}
+        subject: {subject}
+        teacher_name: {teacher_name if teacher_name else 'DepEd Teacher'}
+        position: {position}
+        grade_level: {grade_level}
+        section_class: {section_class if section_class else 'All Sections'}
+        duration: {duration}
+        detail_level: {detail_mode}
+        references: {references if references else 'DepEd Revised K to 10 Curriculum Guide'}
+        competency: {competency}
+        activity_count: {activity_count}
+        learner_context: {learner_context if learner_context else 'General elementary learners'}
+        
+        SPECIAL INSTRUCTION: Please provide maximal instructional detail, complete teacher scripting, step-by-step procedures, and explicit student tasks according to the detail level selected: {detail_mode}.
         """
 
         response = None
@@ -278,16 +300,19 @@ if submitted:
 
         with st.spinner("✏️ LAPIS is crafting your detailed Revised K to 10 lesson plan..."):
             try:
-                genai.configure(api_key=api_key)
+                client = genai.Client(api_key=api_key)
                 
-                # Active supported models only
-                for model_alias in ["gemini-2.5-flash", "gemini-1.5-flash"]:
+                for model_name in candidate_models:
                     try:
-                        model = genai.GenerativeModel(
-                            model_name=model_alias,
-                            generation_config={"response_mime_type": "application/json", "temperature": 0.2}
+                        response = client.models.generate_content(
+                            model=model_name,
+                            contents=user_payload,
+                            config=types.GenerateContentConfig(
+                                system_instruction=MASTER_SYSTEM_PROMPT,
+                                temperature=0.2,
+                                response_mime_type="application/json",
+                            )
                         )
-                        response = model.generate_content(user_payload)
                         if response and response.text:
                             success = True
                             break
